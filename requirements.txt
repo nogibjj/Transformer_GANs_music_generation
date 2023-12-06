@@ -1,0 +1,3 @@
+tensorflow
+muspy
+music21
