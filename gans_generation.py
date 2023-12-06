@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from music21 import stream, note, chord, instrument
+from gans_transformer import get_notes
 
 instr = instrument.Violin()
 
@@ -33,12 +34,11 @@ def create_midi(prediction_output, filename):
 
         # increase offset each iteration so that notes do not stack
         offset += 0.5
-
+    # save that in folder generated_music
     midi_stream = stream.Stream(output_notes)
-    midi_stream.write('midi', fp='{}.mid'.format(filename))
+    midi_stream.write('midi', fp='generated_music/' + filename + '.mid')
 
-
-def generate_music(generator_model, latent_dim, n_vocab, length=500):
+def generate_music(generator_model, latent_dim, n_vocab, length=500, emotion='Q1'):
     """ Generate new musics using the trained generator model """
     # Create random noise as input to the generator
     noise = np.random.normal(0, 1, (1, latent_dim))
@@ -48,6 +48,7 @@ def generate_music(generator_model, latent_dim, n_vocab, length=500):
     pred_notes = [x * (n_vocab / 2) + (n_vocab / 2) for x in predictions[0]]
     
     # Map generated integer indices to note names
+    notes = get_notes(emotion)
     pitchnames = sorted(set(item for item in notes))
     int_to_note = dict((number, note) for number, note in enumerate(pitchnames))
     pred_notes_mapped = [int_to_note[int(x)] for x in pred_notes]
