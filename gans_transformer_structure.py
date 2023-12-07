@@ -15,7 +15,7 @@ def get_notes(emotion):
     
     notes = []
 
-    for file in Path("Dataset/midis_emopia/train").glob(emotion + "*"):
+    for file in Path("midis_emopia").glob(emotion + "*"):
         midi = converter.parse(file)
         print("Parsing %s" % file)
         notes_to_parse = midi.flat.notes
@@ -92,80 +92,66 @@ def create_midi(prediction_output, filename):
 
     midi_stream = stream.Stream(output_notes)
     midi_stream.write('midi', fp='{}.mid'.format(filename))
+from tensorflow.keras.layers import MultiHeadAttention, LayerNormalization
 
-class GAN():
-    def __init__(self, rows):
-        self.seq_length = rows
-        self.seq_shape = (self.seq_length, 1)
-        self.latent_dim = 1000
-        self.disc_loss = []
-        self.gen_loss =[]
-        
-        optimizer = tf.keras.optimizers.legacy.Adam(0.0002, 0.5)
+class TransformerGAN:
+    def __init__(self):
+        self.seq_shape = (100, 1)
+        self.latent_dim = 100
+        self.optimizer = Adam(0.0002, 0.5)
 
         # Build and compile the discriminator
         self.discriminator = self.build_discriminator()
-        self.discriminator.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+        self.discriminator.compile(loss='binary_crossentropy',
+                                   optimizer=self.optimizer,
+                                   metrics=['accuracy'])
 
         # Build the generator
         self.generator = self.build_generator()
 
-        # The generator takes noise as input and generates note sequences
+        # The generator takes noise as input and generates sequences
         z = Input(shape=(self.latent_dim,))
         generated_seq = self.generator(z)
 
         # For the combined model we will only train the generator
         self.discriminator.trainable = False
 
-        # The discriminator takes generated images as input and determines validity
+        # The discriminator takes generated sequences as input and determines validity
         validity = self.discriminator(generated_seq)
 
         # The combined model  (stacked generator and discriminator)
         # Trains the generator to fool the discriminator
         self.combined = Model(z, validity)
-        self.combined.compile(loss='binary_crossentropy', optimizer=optimizer)
+        self.combined.compile(loss='binary_crossentropy', optimizer=self.optimizer)
 
-    def build_discriminator(self):
+    def build_generator(self):
         model = Sequential()
-        model.add(LSTM(512, input_shape=self.seq_shape, return_sequences=True))
-        model.add(Bidirectional(LSTM(512)))
+        input_shape = self.seq_shape
+        model.add(MultiHeadAttention(num_heads=2, key_dim=2))
         model.add(Dense(512))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dense(256))
         model.add(LeakyReLU(alpha=0.2))
-        
-        # Adding Minibatch Discrimination
         model.add(Dense(100))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.5))
         model.add(Dense(1, activation='sigmoid'))
-        model.summary()
+        return model
+    
 
-        seq = Input(shape=self.seq_shape)
-        validity = model(seq)
-
-        return Model(seq, validity)
-      
-    def build_generator(self):
-
+    def build_discriminator(self):
         model = Sequential()
-        model.add(Dense(256, input_dim=self.latent_dim))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
+        input_shape = self.seq_shape
+        model.add(MultiHeadAttention(num_heads=2, key_dim=2))
         model.add(Dense(512))
         model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(1024))
+        model.add(Dense(256))
         model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(np.prod(self.seq_shape), activation='tanh'))
-        model.add(Reshape(self.seq_shape))
-        model.summary()
-        
-        noise = Input(shape=(self.latent_dim,))
-        seq = model(noise)
-
-        return Model(noise, seq)
+        model.add(Dense(100))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.5))
+        model.add(Dense(1, activation='sigmoid'))
+        return model
 
     def train(self, epochs, batch_size=128, sample_interval=50, emotion="Q1"):
 
@@ -248,5 +234,3 @@ class GAN():
         plt.ylabel('Loss')
         plt.savefig('GAN_Loss_per_Epoch_final.png', transparent=True)
         plt.close()
-
-        
