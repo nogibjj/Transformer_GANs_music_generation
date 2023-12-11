@@ -168,6 +168,15 @@ def randomly_sample_aug_data(aug_data, k, augs=25):
     )
     return out
 
+def label (data):
+    """
+    Adds a label to the data
+    """
+    # label is the first two words of the filename
+    
+    data = torch.cat((data, label), dim=1)
+    return data
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -233,7 +242,11 @@ if __name__ == "__main__":
         DATA = aug(DATA, note_shifts=args.transpositions, time_stretches=args.time_stretches,
                    verbose=(args.verbose >= 2))
         print("Done!") if args.verbose else None
-    
+
+
+    # add the label
+
+
     # shuffle data
     DATA = DATA[torch.randperm(DATA.shape[0])]
     

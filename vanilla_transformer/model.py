@@ -28,7 +28,8 @@ class MusicTransformer(nn.Module):
                  vocab_size=hparams["vocab_size"],
                  bias=hparams["bias"],
                  dropout=hparams["dropout"],
-                 layernorm_eps=hparams["layernorm_eps"]):
+                 layernorm_eps=hparams["layernorm_eps"],
+                 num_labels=hparams["num_labels"]):
         """
         Args:
             d_model (int): Transformer hidden dimension size
@@ -52,7 +53,8 @@ class MusicTransformer(nn.Module):
         self.max_rel_dist = max_rel_dist,
         self.max_position = max_abs_position
         self.vocab_size = vocab_size
-
+        #here
+        self.label_head = nn.Linear(d_model, num_labels)
         self.input_embedding = nn.Embedding(vocab_size, d_model)
         self.positional_encoding = abs_positional_encoding(max_abs_position, d_model)
         self.input_dropout = nn.Dropout(dropout)
@@ -83,15 +85,19 @@ class MusicTransformer(nn.Module):
         x = self.input_embedding(x)
         x *= sqrt(self.d_model)
 
+
         # add absolute positional encoding if max_position > 0, and assuming max_position >> seq_len_x
         if self.max_position > 0:
             x += self.positional_encoding[:, :x.shape[-2], :]
 
+
         # input dropout
         x = self.input_dropout(x)
+        
 
         # pass through decoder
         x = self.decoder(x, memory=None, tgt_mask=mask)
+        label_output = self.label_head(x)
 
         # final projection to vocabulary space
-        return self.final(x)
+        return self.final(x), label_output

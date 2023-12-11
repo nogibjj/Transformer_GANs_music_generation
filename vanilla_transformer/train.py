@@ -59,7 +59,7 @@ def loss_fn(prediction, target, criterion=F.cross_entropy):
         masked loss between prediction and target
     """
     mask = torch.ne(target, torch.zeros_like(target))           # ones where target is 0
-    _loss = criterion(prediction, target, reduction='none')     # loss before masking
+    _loss = criterion(prediction, target, reduction='none') 
 
     # multiply mask to loss elementwise to zero out pad positions
     mask = mask.to(_loss.dtype)
@@ -69,7 +69,7 @@ def loss_fn(prediction, target, criterion=F.cross_entropy):
     return torch.sum(_loss) / torch.sum(mask)
 
 
-def train_step(model: MusicTransformer, opt, sched, inp, tar):
+def train_step(model: MusicTransformer, opt, sched, inp, tar, inp_lbl):
     """
     Computes loss and backward pass for a single training step of the model
 
@@ -78,22 +78,38 @@ def train_step(model: MusicTransformer, opt, sched, inp, tar):
         opt: optimizer initialized with model's parameters
         sched: scheduler properly initialized with opt
         inp: input batch
+        inp_lbl : input batch of labels
         tar: input batch shifted right by 1 position; MusicTransformer is a generative model
 
     Returns:
         loss before current backward pass
     """
     # forward pass
-    predictions = model(inp, mask=create_mask(inp, n=inp.dim() + 2))
+    output, label_output = model(inp, mask=create_mask(inp, n=max(inp.dim() + 2, 2)))
+
+    # compute loss
+    loss = loss_fn(output.transpose(-1, -2), tar)
+    label_loss = loss_fn(label_output.transpose(-1, -2), inp_lbl)
+    loss += label_loss
 
     # backward pass
     opt.zero_grad()
-    loss = loss_fn(predictions.transpose(-1, -2), tar)
     loss.backward()
     opt.step()
     sched.step()
 
     return float(loss)
+
+    #predictions =     model(inp, mask=create_mask(inp, n=inp.dim() + 2))
+
+    # backward pass
+    #opt.zero_grad()
+    #loss = loss_fn(predictions.transpose(-1, -2), tar)
+    #loss.backward()
+    #opt.step()
+    #sched.step()
+
+    #return float(loss)
 
 
 def val_step(model: MusicTransformer, inp, tar):
@@ -148,21 +164,37 @@ class MusicTransformerTrainer:
         self.datapath = datapath
         self.batch_size = batch_size
         data = torch.load(datapath).long().to(device)
+        # get the label
+        import os
+
+        # Get the list of all MIDI file names
+        midi_filenames = os.listdir(datapath)
+
+        # Extract the first two characters from each file name and use them as the label
+        labels = [filename[:2] for filename in midi_filenames]
+
+        # Convert the labels to a tensor and move them to the same device as your data
+        labels = torch.tensor(labels).to(device)
 
         # max absolute position must be able to acount for the largest sequence in the data
         if hparams_["max_abs_position"] > 0:
             hparams_["max_abs_position"] = max(hparams_["max_abs_position"], data.shape[-1])
 
         # train / validation split: 80 / 20
-        train_len = round(data.shape[0] * 0.8)
-        train_data = data[:train_len]
-        val_data = data[train_len:]
+        split = int(0.8 * data.shape[0])
+        train_data = data[:split]
+        train_label = labels[:split]
+        val_data = data[split:]
+        val_label = labels[split:]
+
+    
         print(f"There are {data.shape[0]} samples in the data, {len(train_data)} training samples and {len(val_data)} "
               "validation samples")
 
         # datasets and dataloaders: split data into first (n-1) and last (n-1) tokens
         self.train_ds = TensorDataset(train_data[:, :-1], train_data[:, 1:])
         self.train_dl = DataLoader(dataset=self.train_ds, batch_size=batch_size, shuffle=True)
+
 
         self.val_ds = TensorDataset(val_data[:, :-1], val_data[:, 1:])
         self.val_dl = DataLoader(dataset=self.val_ds, batch_size=batch_size, shuffle=True)
@@ -278,9 +310,8 @@ class MusicTransformerTrainer:
 
                 self.model.train()
                 for train_inp, train_tar in self.train_dl:
-                    loss = train_step(self.model, self.optimizer, self.scheduler, train_inp, train_tar)
+                    loss = train_step(self.model, self.optimizer, self.scheduler, train_inp, train_tar, train_inp)
                     train_epoch_losses.append(loss)
-
                 self.model.eval()
                 for val_inp, val_tar in self.val_dl:
                     loss = val_step(self.model, val_inp, val_tar)

@@ -143,6 +143,7 @@ class GAN():
 
         seq = Input(shape=self.seq_shape)
         validity = model(seq)
+        
 
         return Model(seq, validity)
       
@@ -164,7 +165,9 @@ class GAN():
         
         noise = Input(shape=(self.latent_dim,))
         seq = model(noise)
-
+        print("seq shape: ", seq.shape)
+        print("noise shape: ", noise.shape)
+              
         return Model(noise, seq)
 
     def train(self, epochs, batch_size=128, sample_interval=50, emotion="Q1"):

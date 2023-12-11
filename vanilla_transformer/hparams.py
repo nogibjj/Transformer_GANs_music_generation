@@ -11,15 +11,12 @@ See the GNU General Public License for more details. A copy of this license can 
 for music-transformer, or at https://www.gnu.org/licenses/gpl-3.0.html.
 """
 
-from torch import cuda, device as d
+from torch import cuda, device 
 from vocabulary import vocab_size
 
 # get device
-if cuda.is_available():
-    dev = "cuda:0"
-else:
-    dev = "cpu"
-device = d(dev)
+device = device("cuda" if cuda.is_available() else "cpu")
+
 
 # default hparams for the model
 hparams = {
@@ -32,19 +29,6 @@ hparams = {
     "vocab_size": vocab_size,
     "bias": True,
     "dropout": 0.1,
-    "layernorm_eps": 1e-6
-}
-
-# hparams for TF model - significantly larger
-hparams_large = {
-    "d_model": 256,
-    "num_layers": 6,
-    "num_heads": 8,
-    "d_ff": 1024,
-    "max_rel_dist": 1024,
-    "max_abs_position": 0,
-    "vocab_size": vocab_size,
-    "bias": True,
-    "dropout": 0.1,
-    "layernorm_eps": 1e-6
+    "layernorm_eps": 1e-6,
+    "num_labels": 4,
 }
